@@ -1,11 +1,16 @@
 import pygame
 import random
-
+import time
 
 
 
 # Initialize Pygame
 pygame.init()
+
+pygame.mixer.init()
+
+hit_sound = pygame.mixer.Sound("sounds/hit.ogg")  # Make sure the path is correct
+celebration_music = pygame.mixer.Sound("sounds/celebration.wav")
 
 # Screen dimensions and setup
 screen_width, screen_height = 800, 600
@@ -75,6 +80,15 @@ def reset_level():
 
 def show_level_start():
     """Display level start message"""
+
+    # Stop any currently playing music
+    pygame.mixer.music.stop()
+
+     # Load and play music
+    pygame.mixer.music.load("sounds/background.wav")
+    pygame.mixer.music.set_volume(0.1)  # Lower volume for music
+    pygame.mixer.music.play(-1)  # Loop indefinitely
+
     screen.fill(background_color)
     level_text = font.render(f"Level {current_level}", True, (255, 255, 255))
     start_text = font.render("Press SPACE to start", True, (255, 255, 255))
@@ -91,11 +105,50 @@ def show_level_start():
                 waiting = False
     return True
 
+def run_confetti(duration=3):
+    confetti_particles = []
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
+    
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
+        screen.fill(background_color)
+        
+        # Add new confetti particles
+        if len(confetti_particles) < 100:
+            confetti_particles.append([random.randint(0, screen_width), 0, random.choice(colors), random.randint(2, 5)])
+
+        # Update and draw particles
+        for p in confetti_particles:
+            p[1] += p[3]  # move down by speed p[3]
+            pygame.draw.circle(screen, p[2], (p[0], p[1]), 5)
+        
+        # Remove particles that go off screen
+        confetti_particles = [p for p in confetti_particles if p[1] < screen_height]
+
+        pygame.display.flip()
+        clock.tick(60)
+
+def play_celebration():
+    # Stop the background music
+    pygame.mixer.music.stop()
+    
+    # Play celebration sound
+    celebration_music.play()
+
+    # Run confetti animation (you can expand this function)
+    run_confetti()
 
 
 
 # Initialize first level
 reset_level()
+if not show_level_start():
+    running = False
 
 
 
@@ -186,6 +239,7 @@ while running:
 
 
         if player_rect.colliderect(block_rect):
+            hit_sound.play()
             blocks.remove(block)
             player_color = (255, 0, 0)
             player_score -= 1
@@ -202,6 +256,7 @@ while running:
                         running = False
                     reset_level()
                 else:
+                    play_celebration()
                     # Game won
                     win_text = font.render("You Won All Levels!", True, (0, 255, 0))
                     screen.fill(background_color)
