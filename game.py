@@ -116,6 +116,7 @@ ultimate_cooldown = 0
 
 # Particle system
 particles = []
+sparkles = []  # Additional sparkle effects
 
 # Player trail system
 player_trail = []
@@ -134,6 +135,17 @@ for _ in range(100):
 # Screen shake
 screen_shake = 0
 shake_intensity = 0
+
+# Screen transitions
+transition_alpha = 0
+transition_type = None  # 'fade_in', 'fade_out', None
+
+# Glow effects
+glow_particles = []
+
+# Combo display
+combo_display_time = 0
+combo_scale = 1.0
 
 # Obstacle types
 obstacle_types = ['normal', 'fast', 'slow', 'bouncy', 'splitter', 'homing']
@@ -175,8 +187,8 @@ game_time = 0
 invulnerability_time = 0
 invulnerability_duration = 60
 
-def create_particles(x, y, color, count=10, speed_range=(2, 5)):
-    """Create particle explosion effect"""
+def create_particles(x, y, color, count=10, speed_range=(2, 5), particle_type='normal'):
+    """Create particle explosion effect with enhanced visuals"""
     for _ in range(count):
         angle = random.uniform(0, 2 * math.pi)
         speed = random.uniform(speed_range[0], speed_range[1])
@@ -187,12 +199,27 @@ def create_particles(x, y, color, count=10, speed_range=(2, 5)):
             'vy': math.sin(angle) * speed,
             'color': color,
             'life': 30,
-            'size': random.randint(2, 5)
+            'size': random.randint(2, 5),
+            'type': particle_type,
+            'glow': random.choice([True, False]) if particle_type == 'glow' else False
         })
+    
+    # Add sparkles for special effects
+    if particle_type == 'glow' or count > 20:
+        for _ in range(count // 3):
+            sparkles.append({
+                'x': x,
+                'y': y,
+                'vx': random.uniform(-3, 3),
+                'vy': random.uniform(-3, 3),
+                'life': 20,
+                'size': random.randint(3, 6),
+                'color': (255, 255, 255)
+            })
 
 def update_particles():
     """Update and remove dead particles"""
-    global particles
+    global particles, sparkles
     for p in particles[:]:
         p['x'] += p['vx']
         p['y'] += p['vy']
@@ -200,20 +227,42 @@ def update_particles():
         p['life'] -= 1
         if p['life'] <= 0:
             particles.remove(p)
+    
+    for s in sparkles[:]:
+        s['x'] += s['vx']
+        s['y'] += s['vy']
+        s['vx'] *= 0.95
+        s['vy'] *= 0.95
+        s['life'] -= 1
+        if s['life'] <= 0:
+            sparkles.remove(s)
 
 def draw_particles():
-    """Draw all particles"""
+    """Draw all particles with enhanced glow effects"""
     for p in particles:
         alpha = min(255, p['life'] * 8)
-        # Get base color (first 3 values)
         base_color = p['color'][:3] if len(p['color']) >= 3 else p['color']
-        # Create surface with alpha for fading effect
-        if alpha < 255:
-            particle_surface = pygame.Surface((p['size'] * 2, p['size'] * 2), pygame.SRCALPHA)
-            pygame.draw.circle(particle_surface, (*base_color, alpha), (p['size'], p['size']), p['size'])
-            screen.blit(particle_surface, (int(p['x']) - p['size'], int(p['y']) - p['size']))
-        else:
-            pygame.draw.circle(screen, base_color, (int(p['x']), int(p['y'])), p['size'])
+        
+        # Enhanced glow effect
+        if p.get('glow', False) or p.get('type') == 'glow':
+            # Draw outer glow
+            glow_size = p['size'] * 2
+            glow_alpha = alpha // 3
+            glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surface, (*base_color, glow_alpha), (glow_size, glow_size), glow_size)
+            screen.blit(glow_surface, (int(p['x']) - glow_size, int(p['y']) - glow_size))
+        
+        # Draw main particle
+        particle_surface = pygame.Surface((p['size'] * 2, p['size'] * 2), pygame.SRCALPHA)
+        pygame.draw.circle(particle_surface, (*base_color, alpha), (p['size'], p['size']), p['size'])
+        screen.blit(particle_surface, (int(p['x']) - p['size'], int(p['y']) - p['size']))
+    
+    # Draw sparkles
+    for s in sparkles:
+        sparkle_alpha = min(255, s['life'] * 12)
+        sparkle_surface = pygame.Surface((s['size'] * 2, s['size'] * 2), pygame.SRCALPHA)
+        pygame.draw.circle(sparkle_surface, (*s['color'], sparkle_alpha), (s['size'], s['size']), s['size'])
+        screen.blit(sparkle_surface, (int(s['x']) - s['size'], int(s['y']) - s['size']))
 
 def update_stars():
     """Update parallax stars"""
@@ -225,10 +274,23 @@ def update_stars():
             star['x'] = random.randint(0, screen_width)
 
 def draw_stars():
-    """Draw parallax stars"""
+    """Draw parallax stars with twinkling effect"""
     for star in stars:
         brightness = min(255, 150 + star['layer'] * 50)
-        color = (brightness, brightness, brightness)
+        # Twinkling effect
+        twinkle = int(20 * math.sin(game_time * 0.05 + star['x'] * 0.01 + star['y'] * 0.01))
+        final_brightness = min(255, max(100, brightness + twinkle))
+        color = (final_brightness, final_brightness, final_brightness)
+        
+        # Draw star with glow for larger stars
+        if star['size'] >= 2:
+            glow_surface = pygame.Surface((star['size'] * 3, star['size'] * 3), pygame.SRCALPHA)
+            glow_alpha = final_brightness // 3
+            pygame.draw.circle(glow_surface, (*color, glow_alpha), 
+                             (star['size'] * 1.5, star['size'] * 1.5), star['size'] * 1.5)
+            screen.blit(glow_surface, (int(star['x']) - star['size'] * 1.5, 
+                                      int(star['y']) - star['size'] * 1.5))
+        
         pygame.draw.circle(screen, color, (int(star['x']), int(star['y'])), star['size'])
 
 def update_player_trail():
@@ -247,18 +309,29 @@ def update_player_trail():
             player_trail.remove(trail)
 
 def draw_player_trail():
-    """Draw player trail"""
+    """Draw player trail with enhanced glow"""
     for i, trail in enumerate(player_trail):
         alpha = int(255 * (trail['life'] / 15))
         size = int(20 * (trail['life'] / 15))
         if player_image:
-            # Draw faded player image
+            # Draw faded player image with glow
+            trail_surface = pygame.Surface((player_width + 10, player_height + 10), pygame.SRCALPHA)
+            trail_surface.set_alpha(alpha // 4)
+            trail_surface.blit(player_image, (5, 5))
+            screen.blit(trail_surface, (trail['x'] - player_width // 2 - 5, trail['y'] - player_height // 2 - 5))
+            
+            # Main trail
             trail_surface = pygame.Surface((player_width, player_height), pygame.SRCALPHA)
-            trail_surface.set_alpha(alpha // 3)
+            trail_surface.set_alpha(alpha // 2)
             trail_surface.blit(player_image, (0, 0))
             screen.blit(trail_surface, (trail['x'] - player_width // 2, trail['y'] - player_height // 2))
         else:
-            # Use a surface with alpha for the circle
+            # Enhanced circle trail with glow
+            glow_size = size * 1.5
+            glow_surface = pygame.Surface((int(glow_size * 2), int(glow_size * 2)), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surface, (0, 255, 0, alpha // 4), (int(glow_size), int(glow_size)), int(glow_size))
+            screen.blit(glow_surface, (int(trail['x']) - int(glow_size), int(trail['y']) - int(glow_size)))
+            
             trail_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
             pygame.draw.circle(trail_surface, (0, 255, 0, alpha), (size, size), size)
             screen.blit(trail_surface, (int(trail['x']) - size, int(trail['y']) - size))
@@ -290,7 +363,7 @@ def update_power_ups():
                 ultimate_charge = min(max_ultimate_charge, ultimate_charge + 25)
             else:
                 activate_power_up(power['type'])
-            create_particles(power['x'], power['y'], (255, 255, 0), 20)
+            create_particles(power['x'], power['y'], (255, 255, 0), 30, (3, 8), 'glow')
             power_ups.remove(power)
         
         if power['y'] > screen_height + 50:
@@ -324,7 +397,7 @@ def update_active_power_ups():
                 player_speed = base_player_speed + upgrades['speed']
 
 def draw_power_up(power):
-    """Draw a power-up with animation"""
+    """Draw a power-up with enhanced glow and animation"""
     size = power['size'] + int(math.sin(power['pulse']) * 5)
     color_map = {
         'shield': (100, 200, 255),
@@ -335,6 +408,20 @@ def draw_power_up(power):
     }
     color = color_map.get(power['type'], (255, 255, 255))
     
+    # Draw outer glow
+    glow_size = size + 10
+    glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+    glow_alpha = int(100 + 100 * math.sin(power['pulse'] * 2))
+    glow_points = []
+    for i in range(6):
+        angle = (power['rotation'] + i * 60) * math.pi / 180
+        px = glow_size + math.cos(angle) * glow_size // 2
+        py = glow_size + math.sin(angle) * glow_size // 2
+        glow_points.append((px, py))
+    pygame.draw.polygon(glow_surface, (*color, glow_alpha // 2), glow_points)
+    screen.blit(glow_surface, (power['x'] - glow_size, power['y'] - glow_size))
+    
+    # Draw main power-up
     points = []
     for i in range(6):
         angle = (power['rotation'] + i * 60) * math.pi / 180
@@ -343,6 +430,11 @@ def draw_power_up(power):
         points.append((px, py))
     pygame.draw.polygon(screen, color, points)
     pygame.draw.polygon(screen, (255, 255, 255), points, 2)
+    
+    # Draw center glow
+    center_glow = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(center_glow, (*color, 150), (size // 2, size // 2), size // 3)
+    screen.blit(center_glow, (power['x'] - size // 2, power['y'] - size // 2))
 
 def activate_ultimate():
     """Activate ultimate ability"""
@@ -352,12 +444,17 @@ def activate_ultimate():
         ultimate_duration = 180  # 3 seconds
         ultimate_charge = 0
         ultimate_cooldown = 300  # 5 second cooldown
-        # Clear all obstacles on screen
+        # Clear all obstacles on screen with enhanced effect
         for block in blocks[:]:
             create_particles(block['x'] + block['size']//2, block['y'] + block['size']//2,
-                           (255, 200, 0), 30)
+                           (255, 200, 0), 40, (5, 10), 'glow')
             blocks.remove(block)
         add_screen_shake(15)
+        
+        # Create screen-wide flash
+        flash_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        pygame.draw.rect(flash_surface, (255, 255, 200, 100), (0, 0, screen_width, screen_height))
+        screen.blit(flash_surface, (0, 0))
 
 def create_obstacle():
     """Create a random obstacle with type"""
@@ -436,35 +533,77 @@ def update_boss():
         boss_pattern = (boss_pattern + 1) % 2
 
 def draw_boss():
-    """Draw the boss"""
+    """Draw the boss with enhanced visual effects"""
     if not boss_active:
         return
     
     # Boss body
     boss_size = 120
-    boss_rect = pygame.Rect(boss_x - boss_size//2, boss_y - boss_size//2, boss_size, boss_size)
-    
-    # Pulsing effect
     pulse = int(math.sin(game_time * 0.3) * 10)
-    boss_rect.inflate_ip(pulse, pulse)
+    pulse2 = int(math.sin(game_time * 0.5) * 5)
     
-    # Draw boss with glow
+    # Outer glow layers
+    for i in range(3):
+        glow_radius = boss_size//2 + pulse + (i * 15)
+        glow_alpha = 100 - (i * 30)
+        glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+        glow_color = (255, 50 + i * 20, 50 + i * 20, glow_alpha)
+        pygame.draw.circle(glow_surface, glow_color, (glow_radius, glow_radius), glow_radius)
+        screen.blit(glow_surface, (int(boss_x) - glow_radius, int(boss_y) - glow_radius))
+    
+    # Main boss body with multiple layers
     pygame.draw.circle(screen, (255, 50, 50), (int(boss_x), int(boss_y)), boss_size//2 + pulse)
+    pygame.draw.circle(screen, (255, 100, 100), (int(boss_x), int(boss_y)), boss_size//2 + pulse2)
     pygame.draw.circle(screen, (255, 150, 150), (int(boss_x), int(boss_y)), boss_size//2)
     pygame.draw.circle(screen, (255, 200, 200), (int(boss_x), int(boss_y)), boss_size//3)
     
-    # Health bar
+    # Boss eyes (animated)
+    eye_offset = int(math.sin(game_time * 0.2) * 5)
+    pygame.draw.circle(screen, (0, 0, 0), (int(boss_x - 20), int(boss_y - 10 + eye_offset)), 8)
+    pygame.draw.circle(screen, (0, 0, 0), (int(boss_x + 20), int(boss_y - 10 + eye_offset)), 8)
+    
+    # Energy particles around boss
+    for i in range(8):
+        angle = (game_time * 0.1 + i * math.pi / 4) % (2 * math.pi)
+        particle_x = boss_x + math.cos(angle) * (boss_size//2 + 20)
+        particle_y = boss_y + math.sin(angle) * (boss_size//2 + 20)
+        particle_alpha = int(150 + 100 * math.sin(game_time * 0.3 + i))
+        particle_surface = pygame.Surface((10, 10), pygame.SRCALPHA)
+        pygame.draw.circle(particle_surface, (255, 200, 0, particle_alpha), (5, 5), 5)
+        screen.blit(particle_surface, (int(particle_x) - 5, int(particle_y) - 5))
+    
+    # Enhanced health bar with glow
     bar_width = 300
-    bar_height = 20
+    bar_height = 25
     bar_x = screen_width // 2 - bar_width // 2
     bar_y = 10
-    pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height))
+    
+    # Health bar background with glow
+    bar_glow = pygame.Surface((bar_width + 4, bar_height + 4), pygame.SRCALPHA)
+    pygame.draw.rect(bar_glow, (100, 100, 100, 200), (0, 0, bar_width + 4, bar_height + 4))
+    screen.blit(bar_glow, (bar_x - 2, bar_y - 2))
+    
+    pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
     health_width = int(bar_width * (boss_health / boss_max_health))
-    pygame.draw.rect(screen, (255, 50, 50), (bar_x, bar_y, health_width, bar_height))
+    
+    # Gradient health bar
+    if health_width > 0:
+        health_surface = pygame.Surface((health_width, bar_height), pygame.SRCALPHA)
+        for i in range(health_width):
+            ratio = i / health_width
+            r = int(255 * (1 - ratio * 0.5))
+            g = int(50 + ratio * 100)
+            b = 50
+            pygame.draw.line(health_surface, (r, g, b), (i, 0), (i, bar_height))
+        screen.blit(health_surface, (bar_x, bar_y))
+    
     pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
     
+    # Boss text with glow
     boss_text = font.render("BOSS", True, (255, 255, 255))
-    screen.blit(boss_text, (screen_width // 2 - boss_text.get_width() // 2, bar_y + 25))
+    text_glow = font.render("BOSS", True, (255, 100, 100))
+    screen.blit(text_glow, (screen_width // 2 - boss_text.get_width() // 2 + 2, bar_y + 30))
+    screen.blit(boss_text, (screen_width // 2 - boss_text.get_width() // 2, bar_y + 28))
 
 def reset_level():
     """Reset game variables for a new level"""
@@ -486,13 +625,17 @@ def reset_level():
         blocks.append(create_obstacle())
 
 def show_menu():
-    """Display main menu"""
-    global game_state, current_level, player_score, player_lives, combo, max_combo, coins, total_score
+    """Display main menu with enhanced visuals"""
+    global game_state, current_level, player_score, player_lives, combo, max_combo, coins, total_score, game_time
     
     menu_selected = 0
     menu_options = ["Start Game", "High Scores", "Upgrades", "Quit"]
+    menu_time = 0
     
     while game_state == "menu":
+        menu_time += 1
+        game_time = menu_time
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -521,16 +664,40 @@ def show_menu():
         
         # Draw menu
         screen.fill(background_color)
+        update_stars()
         draw_stars()
         
+        # Animated title with glow
+        title_glow = int(20 * math.sin(menu_time * 0.1))
         title = big_font.render("DODGE THE BLOCKS", True, (255, 255, 255))
+        title_glow_text = big_font.render("DODGE THE BLOCKS", True, (255, 200, 100))
+        screen.blit(title_glow_text, (screen_width // 2 - title.get_width() // 2 + title_glow, 
+                                     100 + title_glow))
         screen.blit(title, (screen_width // 2 - title.get_width() // 2, 100))
         
         subtitle = font.render("Ultimate Edition", True, (200, 200, 255))
         screen.blit(subtitle, (screen_width // 2 - subtitle.get_width() // 2, 180))
         
+        # Enhanced menu options with selection indicator
         for i, option in enumerate(menu_options):
-            color = (255, 255, 100) if i == menu_selected else (200, 200, 200)
+            if i == menu_selected:
+                # Selected option with glow and animation
+                scale = 1.0 + 0.1 * math.sin(menu_time * 0.2)
+                color = (255, 255, 100)
+                glow_color = (255, 200, 0)
+                # Draw glow
+                glow_text = font.render(option, True, glow_color)
+                screen.blit(glow_text, (screen_width // 2 - glow_text.get_width() // 2 + 2, 
+                                       250 + i * 60 + 2))
+                # Draw selection indicator
+                indicator_size = int(15 * scale)
+                pygame.draw.circle(screen, color, 
+                                 (screen_width // 2 - 100, 250 + i * 60 + 18), indicator_size)
+                pygame.draw.circle(screen, (255, 255, 255), 
+                                 (screen_width // 2 - 100, 250 + i * 60 + 18), indicator_size, 2)
+            else:
+                color = (200, 200, 200)
+            
             option_text = font.render(option, True, color)
             screen.blit(option_text, (screen_width // 2 - option_text.get_width() // 2, 250 + i * 60))
         
@@ -627,7 +794,9 @@ def show_upgrade_shop():
     return True
 
 def show_level_start():
-    """Display level start message"""
+    """Display level start message with enhanced visuals"""
+    global game_time
+    
     try:
         pygame.mixer.music.stop()
         pygame.mixer.music.load("sounds/background.wav")
@@ -636,19 +805,35 @@ def show_level_start():
     except:
         pass
 
-    screen.fill(background_color)
-    draw_stars()
-    level_text = big_font.render(f"Level {current_level}", True, (255, 255, 255))
-    start_text = font.render("Press SPACE to start", True, (200, 200, 255))
-    target_text = small_font.render(f"Target Score: {winning_scores[current_level - 1]}", True, (150, 150, 200))
-    
-    screen.blit(level_text, (screen_width // 2 - level_text.get_width() // 2, screen_height // 2 - 80))
-    screen.blit(start_text, (screen_width // 2 - start_text.get_width() // 2, screen_height // 2 + 20))
-    screen.blit(target_text, (screen_width // 2 - target_text.get_width() // 2, screen_height // 2 + 70))
-    pygame.display.flip()
-    
+    start_time = 0
     waiting = True
     while waiting:
+        start_time += 1
+        game_time = start_time
+        
+        update_stars()
+        screen.fill(background_color)
+        draw_stars()
+        
+        # Animated level text
+        pulse = int(15 * math.sin(start_time * 0.15))
+        level_text = big_font.render(f"Level {current_level}", True, (255, 255, 255))
+        level_glow = big_font.render(f"Level {current_level}", True, (100, 200, 255))
+        screen.blit(level_glow, (screen_width // 2 - level_text.get_width() // 2 + pulse, 
+                               screen_height // 2 - 80 + pulse))
+        screen.blit(level_text, (screen_width // 2 - level_text.get_width() // 2, screen_height // 2 - 80))
+        
+        # Blinking start text
+        if (start_time // 30) % 2:
+            start_text = font.render("Press SPACE to start", True, (200, 200, 255))
+            screen.blit(start_text, (screen_width // 2 - start_text.get_width() // 2, screen_height // 2 + 20))
+        
+        target_text = small_font.render(f"Target Score: {winning_scores[current_level - 1]}", True, (150, 150, 200))
+        screen.blit(target_text, (screen_width // 2 - target_text.get_width() // 2, screen_height // 2 + 70))
+        
+        pygame.display.flip()
+        clock.tick(60)
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -858,16 +1043,18 @@ while running:
                 coins += score_gain
                 combo += 1
                 max_combo = max(max_combo, combo)
+                combo_display_time = 60
+                combo_scale = 1.3
                 check_achievements()
                 create_particles(block['x'] + block['size']//2, block['y'] + block['size']//2,
-                                (100, 255, 100), 5)
+                                (100, 255, 100), 10, (3, 7), 'glow')
             blocks.remove(block)
 
         if player_rect.colliderect(block_rect) and invulnerability_time <= 0 and not ultimate_active:
             if 'shield' in active_power_ups:
                 del active_power_ups['shield']
                 create_particles(block['x'] + block['size']//2, block['y'] + block['size']//2,
-                                (100, 200, 255), 15)
+                                (100, 200, 255), 25, (4, 8), 'glow')
             else:
                 if hit_sound:
                     hit_sound.play()
@@ -876,10 +1063,10 @@ while running:
                 invulnerability_time = invulnerability_duration
                 add_screen_shake(8)
                 create_particles(block['x'] + block['size']//2, block['y'] + block['size']//2,
-                                (255, 100, 100), 20)
+                                (255, 100, 100), 30, (5, 10), 'glow')
                 
                 if player_lives <= 0:
-                    # Game over
+                    # Game over with enhanced visuals
                     total_score = player_score
                     if total_score > high_score:
                         high_score = total_score
@@ -888,18 +1075,41 @@ while running:
                         high_combo = max_combo
                         save_high_score(high_score, high_combo)
                     
-                    screen.fill(background_color)
-                    draw_stars()
-                    game_over_text = big_font.render("Game Over!", True, (255, 100, 100))
-                    score_text = font.render(f"Final Score: {total_score}", True, (255, 255, 255))
-                    combo_text = font.render(f"Max Combo: {max_combo}x", True, (255, 255, 255))
-                    coins_text = font.render(f"Coins Earned: {coins}", True, (255, 255, 100))
-                    screen.blit(game_over_text, (screen_width // 2 - game_over_text.get_width() // 2, screen_height // 2 - 150))
-                    screen.blit(score_text, (screen_width // 2 - score_text.get_width() // 2, screen_height // 2 - 50))
-                    screen.blit(combo_text, (screen_width // 2 - combo_text.get_width() // 2, screen_height // 2))
-                    screen.blit(coins_text, (screen_width // 2 - coins_text.get_width() // 2, screen_height // 2 + 50))
-                    pygame.display.flip()
-                    pygame.time.wait(3000)
+                    # Create explosion effect
+                    for _ in range(50):
+                        create_particles(player_rect.centerx, player_rect.centery, 
+                                       (255, 100, 100), 1, (5, 10), 'glow')
+                    
+                    # Show game over screen
+                    wait_time = 0
+                    while wait_time < 180:  # 3 seconds at 60fps
+                        wait_time += 1
+                        update_particles()
+                        update_stars()
+                        
+                        screen.fill(background_color)
+                        draw_stars()
+                        draw_particles()
+                        
+                        # Pulsing game over text
+                        pulse = int(10 * math.sin(wait_time * 0.2))
+                        game_over_text = big_font.render("Game Over!", True, (255, 100, 100))
+                        game_over_glow = big_font.render("Game Over!", True, (255, 50, 50))
+                        screen.blit(game_over_glow, (screen_width // 2 - game_over_text.get_width() // 2 + pulse, 
+                                                     screen_height // 2 - 150 + pulse))
+                        screen.blit(game_over_text, (screen_width // 2 - game_over_text.get_width() // 2, 
+                                                   screen_height // 2 - 150))
+                        
+                        score_text = font.render(f"Final Score: {total_score}", True, (255, 255, 255))
+                        combo_text = font.render(f"Max Combo: {max_combo}x", True, (255, 255, 255))
+                        coins_text = font.render(f"Coins Earned: {coins}", True, (255, 255, 100))
+                        screen.blit(score_text, (screen_width // 2 - score_text.get_width() // 2, screen_height // 2 - 50))
+                        screen.blit(combo_text, (screen_width // 2 - combo_text.get_width() // 2, screen_height // 2))
+                        screen.blit(coins_text, (screen_width // 2 - coins_text.get_width() // 2, screen_height // 2 + 50))
+                        
+                        pygame.display.flip()
+                        clock.tick(60)
+                    
                     game_state = "menu"
                     continue
             
@@ -927,9 +1137,18 @@ while running:
             boss_active = False
             coins += 50 + current_level * 10
             player_score += 20  # Bonus for defeating boss
-            create_particles(boss_x, boss_y, (255, 200, 0), 100)
+            # Massive explosion effect
+            for _ in range(5):
+                create_particles(boss_x + random.randint(-50, 50), 
+                               boss_y + random.randint(-50, 50), 
+                               (255, 200, 0), 30, (8, 15), 'glow')
             add_screen_shake(20)
             check_achievements()
+            
+            # Victory flash
+            flash_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+            pygame.draw.rect(flash_surface, (255, 255, 100, 150), (0, 0, screen_width, screen_height))
+            screen.blit(flash_surface, (0, 0))
 
     # Check level completion
     if player_score >= winning_scores[current_level - 1] and not boss_active:
@@ -974,15 +1193,45 @@ while running:
     draw_particles()
     draw_player_trail()
    
-    # Draw obstacles
+    # Draw obstacles with enhanced visuals
     for block in blocks:
+        block_center_x = block['x'] + block['size']//2
+        block_center_y = block['y'] + block['size']//2
+        
         if rock_image:
+            # Add glow to rock
+            glow_size = block['size'] + 10
+            glow_surface = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
+            glow_alpha = int(100 + 50 * math.sin(game_time * 0.2 + block['x'] * 0.01))
+            color = block_colors[obstacle_types.index(block['type']) % len(block_colors)]
+            pygame.draw.circle(glow_surface, (*color, glow_alpha // 3), 
+                             (glow_size//2, glow_size//2), glow_size//2)
+            screen.blit(glow_surface, (block['x'] - 5, block['y'] - 5))
+            
             rotated_image = pygame.transform.rotate(rock_image, block['rotation'])
             screen.blit(rotated_image, (block['x'], block['y']))
         else:
             color = block_colors[obstacle_types.index(block['type']) % len(block_colors)]
+            
+            # Glow effect
+            glow_size = block['size'] + 8
+            glow_surface = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
+            glow_alpha = int(150 + 100 * math.sin(game_time * 0.2 + block['x'] * 0.01))
+            pygame.draw.rect(glow_surface, (*color, glow_alpha // 2), 
+                           (0, 0, glow_size, glow_size))
+            screen.blit(glow_surface, (block['x'] - 4, block['y'] - 4))
+            
+            # Main block
             pygame.draw.rect(screen, color, (block['x'], block['y'], block['size'], block['size']))
             pygame.draw.rect(screen, (255, 255, 255), (block['x'], block['y'], block['size'], block['size']), 2)
+            
+            # Type indicator
+            if block['type'] == 'fast':
+                pygame.draw.circle(screen, (255, 255, 255), 
+                                 (block_center_x, block_center_y), 5)
+            elif block['type'] == 'homing':
+                pygame.draw.circle(screen, (255, 0, 0), 
+                                 (block_center_x, block_center_y), 5)
    
     # Draw boss
     draw_boss()
@@ -991,35 +1240,86 @@ while running:
     for power in power_ups:
         draw_power_up(power)
    
-    # Draw player
+    # Draw player with enhanced effects
     if invulnerability_time <= 0 or (invulnerability_time // 5) % 2:
+        player_draw_x = player_rect.x + shake_x
+        player_draw_y = player_rect.y + shake_y
+        
+        # Player glow effect
+        if 'speed' in active_power_ups:
+            glow_surface = pygame.Surface((player_width + 20, player_height + 20), pygame.SRCALPHA)
+            glow_alpha = int(100 + 100 * math.sin(game_time * 0.3))
+            pygame.draw.ellipse(glow_surface, (255, 200, 100, glow_alpha),
+                              (0, 0, player_width + 20, player_height + 20))
+            screen.blit(glow_surface, (player_draw_x - 10, player_draw_y - 10))
+        
         if player_image:
-            screen.blit(player_image, (player_rect.x + shake_x, player_rect.y + shake_y))
+            screen.blit(player_image, (player_draw_x, player_draw_y))
         else:
+            # Enhanced player rectangle with gradient effect
             pygame.draw.rect(screen, (0, 255, 0), 
-                           (player_rect.x + shake_x, player_rect.y + shake_y, player_width, player_height))
+                           (player_draw_x, player_draw_y, player_width, player_height))
+            # Inner highlight
+            pygame.draw.rect(screen, (100, 255, 100), 
+                           (player_draw_x + 5, player_draw_y + 5, player_width - 10, player_height - 10))
     
-    # Ultimate effect
+    # Ultimate effect with enhanced visuals
     if ultimate_active:
-        glow_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
-        glow_alpha = int(100 + 100 * math.sin(game_time * 0.5))
-        pygame.draw.circle(glow_surface, (255, 200, 0, glow_alpha), 
-                         (player_rect.centerx, player_rect.centery), 200)
-        screen.blit(glow_surface, (0, 0))
+        # Multiple glow layers
+        for i in range(3):
+            glow_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+            glow_radius = 200 + i * 50
+            glow_alpha = int((100 + 100 * math.sin(game_time * 0.5)) / (i + 1))
+            glow_color = (255, 200 - i * 30, 0, glow_alpha)
+            pygame.draw.circle(glow_surface, glow_color, 
+                             (player_rect.centerx, player_rect.centery), glow_radius)
+            screen.blit(glow_surface, (0, 0))
+        
+        # Energy waves
+        for i in range(5):
+            wave_radius = 150 + (game_time % 30) * 5 + i * 20
+            wave_alpha = int(150 * (1 - (game_time % 30) / 30))
+            wave_surface = pygame.Surface((wave_radius * 2, wave_radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(wave_surface, (255, 255, 255, wave_alpha),
+                             (wave_radius, wave_radius), wave_radius, 3)
+            screen.blit(wave_surface, (player_rect.centerx - wave_radius, 
+                                     player_rect.centery - wave_radius))
     
-    # Shield effect
+    # Shield effect with enhanced visuals
     if 'shield' in active_power_ups:
         shield_alpha = int(100 + 155 * math.sin(game_time * 0.2))
+        
+        # Outer shield glow
+        outer_shield = pygame.Surface((player_width + 40, player_height + 40), pygame.SRCALPHA)
+        outer_shield.set_alpha(shield_alpha // 3)
+        pygame.draw.ellipse(outer_shield, (100, 200, 255),
+                          (0, 0, player_width + 40, player_height + 40), 5)
+        screen.blit(outer_shield, (player_rect.x - 20 + shake_x, player_rect.y - 20 + shake_y))
+        
+        # Main shield
         shield_surface = pygame.Surface((player_width + 20, player_height + 20), pygame.SRCALPHA)
         shield_surface.set_alpha(shield_alpha)
         pygame.draw.ellipse(shield_surface, (100, 200, 255),
                           (0, 0, player_width + 20, player_height + 20), 3)
         screen.blit(shield_surface, (player_rect.x - 10 + shake_x, player_rect.y - 10 + shake_y))
+        
+        # Shield particles
+        for i in range(8):
+            angle = (game_time * 0.1 + i * math.pi / 4) % (2 * math.pi)
+            particle_x = player_rect.centerx + math.cos(angle) * (player_width // 2 + 15)
+            particle_y = player_rect.centery + math.sin(angle) * (player_height // 2 + 15)
+            particle_alpha = int(200 + 55 * math.sin(game_time * 0.3 + i))
+            particle_surface = pygame.Surface((8, 8), pygame.SRCALPHA)
+            pygame.draw.circle(particle_surface, (100, 200, 255, particle_alpha), (4, 4), 4)
+            screen.blit(particle_surface, (int(particle_x) - 4, int(particle_y) - 4))
    
-    # Draw UI
+    # Draw UI with enhanced visuals
     score_display = f"Score: {player_score}"
     if 'multiplier' in active_power_ups:
         score_display += " x2"
+        # Animated multiplier indicator
+        multiplier_glow = font.render(score_display, True, (255, 255, 0))
+        screen.blit(multiplier_glow, (12, 12))
     score_text = font.render(score_display, True, (255, 255, 255))
     screen.blit(score_text, (10, 10))
     
@@ -1035,33 +1335,100 @@ while running:
     coins_text = font.render(f"Coins: {coins}", True, (255, 255, 100))
     screen.blit(coins_text, (10, 170))
     
-    # Health bar
+    # Health bar with gradient
     bar_width = 200
     bar_height = 20
     bar_x = 10
     bar_y = 210
-    pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height))
+    pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
     health_width = int(bar_width * (player_lives / (max_lives + upgrades['lives'])))
-    pygame.draw.rect(screen, (255, 100, 100), (bar_x, bar_y, health_width, bar_height))
+    if health_width > 0:
+        # Gradient health bar
+        health_surface = pygame.Surface((health_width, bar_height), pygame.SRCALPHA)
+        for i in range(health_width):
+            ratio = i / bar_width if bar_width > 0 else 0
+            r = int(255 - ratio * 100)
+            g = int(100 + ratio * 100)
+            b = 100
+            pygame.draw.line(health_surface, (r, g, b), (i, 0), (i, bar_height))
+        screen.blit(health_surface, (bar_x, bar_y))
     pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
     
-    # Ultimate charge bar
+    # Health bar glow when low
+    if player_lives <= 1:
+        glow_alpha = int(100 + 100 * math.sin(game_time * 0.5))
+        health_glow = pygame.Surface((bar_width + 4, bar_height + 4), pygame.SRCALPHA)
+        pygame.draw.rect(health_glow, (255, 100, 100, glow_alpha), 
+                       (0, 0, bar_width + 4, bar_height + 4))
+        screen.blit(health_glow, (bar_x - 2, bar_y - 2))
+    
+    # Ultimate charge bar with enhanced visuals
     ult_bar_width = 200
     ult_bar_height = 15
     ult_bar_x = 10
     ult_bar_y = 240
-    pygame.draw.rect(screen, (50, 50, 50), (ult_bar_x, ult_bar_y, ult_bar_width, ult_bar_height))
+    pygame.draw.rect(screen, (30, 30, 30), (ult_bar_x, ult_bar_y, ult_bar_width, ult_bar_height))
     ult_width = int(ult_bar_width * (ultimate_charge / max_ultimate_charge))
-    ult_color = (255, 200, 0) if ultimate_charge >= max_ultimate_charge else (200, 100, 255)
-    pygame.draw.rect(screen, ult_color, (ult_bar_x, ult_bar_y, ult_width, ult_bar_height))
+    
+    if ult_width > 0:
+        # Animated gradient for ultimate bar
+        ult_surface = pygame.Surface((ult_width, ult_bar_height), pygame.SRCALPHA)
+        for i in range(ult_width):
+            if ultimate_charge >= max_ultimate_charge:
+                # Pulsing gold when ready
+                pulse = int(50 * math.sin(game_time * 0.3))
+                r = 255
+                g = 200 + pulse
+                b = 0
+            else:
+                # Purple gradient
+                ratio = i / ult_bar_width if ult_bar_width > 0 else 0
+                r = int(200 - ratio * 50)
+                g = int(100 + ratio * 50)
+                b = 255
+            pygame.draw.line(ult_surface, (r, g, b), (i, 0), (i, ult_bar_height))
+        screen.blit(ult_surface, (ult_bar_x, ult_bar_y))
+    
     pygame.draw.rect(screen, (255, 255, 255), (ult_bar_x, ult_bar_y, ult_bar_width, ult_bar_height), 2)
+    
+    # Glow when ready
+    if ultimate_charge >= max_ultimate_charge:
+        glow_alpha = int(100 + 100 * math.sin(game_time * 0.5))
+        ult_glow = pygame.Surface((ult_bar_width + 4, ult_bar_height + 4), pygame.SRCALPHA)
+        pygame.draw.rect(ult_glow, (255, 200, 0, glow_alpha), 
+                        (0, 0, ult_bar_width + 4, ult_bar_height + 4))
+        screen.blit(ult_glow, (ult_bar_x - 2, ult_bar_y - 2))
+    
     ult_text = small_font.render("ULTIMATE (Q)", True, (255, 255, 255))
+    if ultimate_charge >= max_ultimate_charge:
+        ult_text = small_font.render("ULTIMATE (Q) - READY!", True, (255, 255, 0))
     screen.blit(ult_text, (ult_bar_x, ult_bar_y - 18))
     
-    # Combo
+    # Combo with enhanced display
     if combo > 0:
-        combo_text = font.render(f"Combo: {combo}x", True, (255, 255, 100))
+        # Animate combo scale
+        if combo_display_time > 0:
+            combo_display_time -= 1
+            combo_scale = max(1.0, combo_scale - 0.01)
+        else:
+            combo_scale = 1.0
+        
+        # Combo text with glow
+        combo_size = int(36 * combo_scale)
+        combo_font = pygame.font.Font(None, combo_size)
+        combo_text = combo_font.render(f"Combo: {combo}x", True, (255, 255, 100))
+        
+        # Glow effect
+        glow_text = combo_font.render(f"Combo: {combo}x", True, (255, 200, 0))
+        for offset in [(2, 2), (-2, -2), (2, -2), (-2, 2)]:
+            screen.blit(glow_text, (screen_width - combo_text.get_width() - 10 + offset[0], 
+                                   10 + offset[1]))
         screen.blit(combo_text, (screen_width - combo_text.get_width() - 10, 10))
+        
+        # Combo multiplier indicator
+        if combo >= 10:
+            multiplier_text = small_font.render(f"+{combo // 10}x BONUS!", True, (255, 255, 0))
+            screen.blit(multiplier_text, (screen_width - multiplier_text.get_width() - 10, 50))
     
     # Max combo
     if max_combo > 0:
